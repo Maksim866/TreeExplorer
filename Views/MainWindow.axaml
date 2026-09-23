@@ -1,0 +1,78 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TreeExplorer.ViewModels"
+        xmlns:models="using:TreeExplorer.Models"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        x:Class="TreeExplorer.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="TreeExplorer - Проводник Windows"
+        Width="800" Height="450"
+        WindowStartupLocation="CenterScreen">
+
+    <Design.DataContext>
+        <vm:MainViewModel/>
+    </Design.DataContext>
+
+    <Grid RowDefinitions="Auto, Auto, *, Auto" Margin="12">
+        <!-- 1. ЗАГОЛОВОК ПРИЛОЖЕНИЯ -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="TreeExplorer" FontSize="20" FontWeight="Bold" Foreground="#2B579A"/>
+            <TextBlock Text="Инструмент для наглядного просмотра структуры папок и файлов" 
+                       FontSize="12" Foreground="#666666"/>
+        </StackPanel>
+
+        <!-- 2. ПАНЕЛЬ ВЫБОРА ПУТИ -->
+        <Grid Grid.Row="1" ColumnDefinitions="*, Auto, Auto" Margin="0,0,0,12">
+            <TextBox Grid.Column="0" 
+                     Text="{Binding CurrentPath, Mode=TwoWay}" 
+                     Watermark="Введите путь к папке (например, C:\Users или D:\Projects)..."
+                     VerticalAlignment="Center"/>
+
+            <Button Grid.Column="1" 
+                    Content="Перейти" 
+                    Margin="8,0,0,0" 
+                    Click="OnOpenPathClick"/>
+
+            <Button Grid.Column="2" 
+                    Content="Обзор..." 
+                    Margin="8,0,0,0" 
+                    Click="OnBrowseFolderClick"/>
+        </Grid>
+
+        <!-- 3. ДЕРЕВО ФАЙЛОВ И ПАПОК -->
+        <Border Grid.Row="2" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="6" Padding="4" Background="#FAFAFA">
+            <Grid>
+                <!-- Сообщение-заглушка, если ничего не выбрано -->
+                <TextBlock Text="Укажите путь выше или нажмите «Обзор...», чтобы открыть папку" 
+                           HorizontalAlignment="Center" 
+                           VerticalAlignment="Center" 
+                           Foreground="#A0A0A0" 
+                           FontSize="14"
+                           IsVisible="{Binding !RootNodes.Count}"/>
+
+                <!-- Дерево элементов -->
+                <TreeView ItemsSource="{Binding RootNodes}"
+                          TreeViewItem.Expanded="OnTreeExpanded"
+                          DoubleTapped="OnTreeItemDoubleTapped">
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="models:FileSystemNode">
+                            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <Image Source="{Binding Icon}" Width="16" Height="16" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </Grid>
+        </Border>
+
+        <!-- 4. СТРОКА СОСТОЯНИЯ (ПОДВАЛ) -->
+        <Border Grid.Row="3" Margin="0,8,0,0" Padding="4">
+            <TextBlock Text="{Binding CurrentPath, StringFormat='Текущий каталог: {0}'}" 
+                       FontSize="11" Foreground="#888888"/>
+        </Border>
+    </Grid>
+</Window>
