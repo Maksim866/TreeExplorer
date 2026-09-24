@@ -1,11 +1,10 @@
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Threading.Tasks;
-using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using TreeExplorer.Models;
+using TreeExplorer.Services;
 
 namespace TreeExplorer.ViewModels;
 
@@ -14,60 +13,28 @@ namespace TreeExplorer.ViewModels;
 /// </summary>
 public partial class MainViewModel : ViewModelBase
 {
-    /// <summary>
-    /// Текущий путь, выбранный пользователем в файловой системе.
-    /// </summary>
-    private string currentPath = string.Empty;
-    private string searchText = string.Empty;
-
-    private bool isSearching;
+    private readonly FileSearchService fileSearchService = new();
+    private readonly FileOpenerService fileOpenerService = new();
 
     private FileSystemNode? originalRootNode;
 
-    public string CurrentPath
-    {
-        get => currentPath;
-        set
-        {
-            if (currentPath != value)
-            {
-                currentPath = value;
-                OnPropertyChanged();
-            }
-        }
-    }
+    /// <summary>
+    /// Текущий путь, выбранный пользователем в файловой системе.
+    /// </summary>
+    [ObservableProperty]
+    private string currentPath = string.Empty;
 
     /// <summary>
-    /// Текст для поиска по названию файлов и папок.
+    /// Текст поискового запроса
     /// </summary>
-    public string SearchText
-    {
-        get => searchText;
-        set
-        {
-            if (searchText != value)
-            {
-                searchText = value;
-                OnPropertyChanged();
-            }
-        }
-    }
+    [ObservableProperty]
+    private string searchText = string.Empty;
 
     /// <summary>
-    /// Флаг выполнения поиска (для отключения кнопок или показа индикатора)
+    /// Флаг активности фонового поиска
     /// </summary>
-    public bool IsSearching
-    {
-        get => isSearching;
-        set
-        {
-            if (isSearching != value)
-            {
-                isSearching = value;
-                OnPropertyChanged();
-            }
-        }
-    }
+    [ObservableProperty]
+    private bool isSearching;
 
     /// <summary>
     /// Корневые узлы файловой системы, представляющие доступные диски.
@@ -82,7 +49,11 @@ public partial class MainViewModel : ViewModelBase
         // При старте ничего не заполнено — ждем действий пользователя
     }
 
-    public void OpenPath()
+    /// <summary>
+    /// Асинхронно открывает каталог по текущему пути и применяет поиск
+    /// </summary>
+    [RelayCommand]
+    public async Task OpenPathAsync()
     {
         if (string.IsNullOrWhiteSpace(CurrentPath) || (!Directory.Exists(CurrentPath) && !File.Exists(CurrentPath)))
         {
@@ -99,12 +70,16 @@ public partial class MainViewModel : ViewModelBase
 
         if (isDirectory)
         {
-            originalRootNode.LoadChildren();
+            await originalRootNode.LoadChildrenAsync();
         }
 
-        var task = ApplySearchAsync();
+        await ApplySearchAsync();
     }
 
+    /// <summary>
+    /// Асинхронно выполняет фильтрацию элементов в пределах текущего каталога
+    /// </summary>
+    [RelayCommand]
     public async Task ApplySearchAsync()
     {
         if (IsSearching)
@@ -116,7 +91,6 @@ public partial class MainViewModel : ViewModelBase
 
         try
         {
-            // 1. Если поисковый запрос пуст — возвращаем исходную структуру текущей папки
             if (string.IsNullOrWhiteSpace(SearchText))
             {
                 RootNodes.Clear();
@@ -128,83 +102,10 @@ public partial class MainViewModel : ViewModelBase
             }
 
             string query = SearchText.Trim();
-            string targetPath = CurrentPath?.Trim() ?? string.Empty;
+            string targetPath = CurrentPath.Trim();
 
-            if (string.IsNullOrWhiteSpace(targetPath) || !Directory.Exists(targetPath))
-            {
-                return;
-            }
+            var searchResultNode = await fileSearchService.SearchFirstLevelAsync(targetPath, query);
 
-            // 2. Выполняем поиск совпадений первого уровня в фоновом потоке
-            var searchResultNode = await Task.Run(() =>
-            {
-                var rootDirNode = new FileSystemNode(targetPath, isDirectory: true)
-                {
-                    IsLoaded = true,
-                    IsExpanded = true
-                };
-                rootDirNode.Children.Clear();
-
-                var dirInfo = new DirectoryInfo(targetPath);
-
-                // А) Ищем совпадения среди папок первого уровня
-                try
-                {
-                    foreach (var subDir in dirInfo.GetDirectories())
-                    {
-                        if (subDir.Attributes.HasFlag(FileAttributes.Hidden) ||
-                            subDir.Attributes.HasFlag(FileAttributes.System))
-                        {
-                            continue;
-                        }
-
-                        if (subDir.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
-                        {
-                            var folderNode = new FileSystemNode(subDir.FullName, isDirectory: true)
-                            {
-                                IsMatch = true
-                            };
-
-                            // Загружаем её дочерние элементы по умолчанию, 
-                            // чтобы у узла появилось дерево и стрелочка для раскрытия:
-                            folderNode.LoadChildren();
-
-                            rootDirNode.Children.Add(folderNode);
-                        }
-                    }
-                }
-                catch (UnauthorizedAccessException) { }
-                catch (Exception) { }
-
-                // Б) Ищем совпадения среди файлов первого уровня
-                try
-                {
-                    foreach (var file in dirInfo.GetFiles())
-                    {
-                        if (file.Attributes.HasFlag(FileAttributes.Hidden) ||
-                            file.Attributes.HasFlag(FileAttributes.System))
-                        {
-                            continue;
-                        }
-
-                        if (file.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
-                        {
-                            var fileNode = new FileSystemNode(file.FullName, isDirectory: false)
-                            {
-                                IsMatch = true
-                            };
-                            fileNode.Children.Clear();
-                            rootDirNode.Children.Add(fileNode);
-                        }
-                    }
-                }
-                catch (UnauthorizedAccessException) { }
-                catch (Exception) { }
-
-                return rootDirNode;
-            });
-
-            // 3. Вывод результатов в UI
             RootNodes.Clear();
             if (searchResultNode != null)
             {
@@ -216,8 +117,13 @@ public partial class MainViewModel : ViewModelBase
             IsSearching = false;
         }
     }
+
+    /// <summary>
+    /// Команда для установки выбранного узла в качестве текущего корневого каталога.
+    /// </summary>
+    /// <param name="node"></param>
     [RelayCommand]
-    private void SetAsRoot(FileSystemNode? node)
+    private async Task SetAsRootAsync(FileSystemNode? node)
     {
         if (node == null || !node.IsDirectory || string.IsNullOrWhiteSpace(node.FullPath) || !Directory.Exists(node.FullPath))
         {
@@ -226,6 +132,18 @@ public partial class MainViewModel : ViewModelBase
 
         SearchText = string.Empty;
         CurrentPath = node.FullPath;
-        OpenPath();
+        await OpenPathAsync();
+    }
+
+    /// <summary>
+    /// Команда для открытия файла внешней программой по умолчанию
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenFileAsync(FileSystemNode? node)
+    {
+        if (node != null && !node.IsDirectory && !string.IsNullOrWhiteSpace(node.FullPath))
+        {
+            await fileOpenerService.OpenFileWithDefaultProgramAsync(node.FullPath);
+        }
     }
 }

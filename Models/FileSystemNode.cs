@@ -1,7 +1,8 @@
-using System;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
+using CommunityToolkit.Mvvm.ComponentModel;
 using TreeExplorer.Services;
 using TreeExplorer.ViewModels;
 
@@ -10,44 +11,56 @@ namespace TreeExplorer.Models;
 /// <summary>
 /// Представляет узел файловой системы, который может быть файлом или папкой.
 /// </summary>
-public class FileSystemNode : ViewModelBase
+public partial class FileSystemNode : ViewModelBase
 {
+    private readonly DirectoryLoaderService directoryLoaderService = new();
+
+    /// <summary>
+    /// Название файла или каталога
+    /// </summary>
+    [ObservableProperty]
+    private string name = string.Empty;
+
+    /// <summary>
+    /// Полный путь к элементу в файловой системе
+    /// </summary>
+    [ObservableProperty]
+    private string fullPath = string.Empty;
+
+    /// <summary>
+    /// Указывает, является ли узел каталогом.
+    /// </summary>
+    [ObservableProperty]
+    private bool isDirectory;
+
+    /// <summary>
+    /// Иконка, представляющая элемент в интерфейсе.
+    /// </summary>
+    [ObservableProperty]
+    private Bitmap? icon;
+
+    /// <summary>
+    /// Флаг совпадения с текущим поисковым запросом.
+    /// </summary>
+    [ObservableProperty]
+    private bool isMatch;
+
+    /// <summary>
+    /// Указывает, загружено ли дочернее содержимое узла.
+    /// </summary>
+    [ObservableProperty]
+    private bool isLoaded;
+
+    /// <summary>
+    /// Состояние раскрытия элемента в дереве TreeView.
+    /// </summary>
+    [ObservableProperty]
     private bool isExpanded;
 
     /// <summary>
-    /// Имя файла или папки.
+    /// Дочерние узлы файловой системы.
     /// </summary>
-    public string Name { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Полный путь к файлу или папке.
-    /// </summary>
-    public string FullPath { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Указывает, является ли узел директорией.
-    /// </summary>
-    public bool IsDirectory { get; set; }
-
-    /// <summary>
-    /// Иконка, представляющая файл или папку.
-    /// </summary>
-    public Bitmap? Icon { get; set; }
-
-    /// <summary>
-    /// Флаг совпадения с поисковым запросом
-    /// </summary>
-    public bool IsMatch { get; set; }
-
-    /// <summary>
-    /// Коллекция дочерних узлов, если узел является директорией.
-    /// </summary>
-    public ObservableCollection<FileSystemNode> Children { get; set; } = new();
-
-    /// <summary>
-    /// Указывает, загружены ли дочерние узлы для данного узла.
-    /// </summary>
-    public bool IsLoaded { get; set; }
+    public ObservableCollection<FileSystemNode> Children { get; } = new();
 
     /// <summary>
     /// Инициализирует новый экземпляр узла файловой системы.
@@ -72,62 +85,21 @@ public class FileSystemNode : ViewModelBase
     }
 
     /// <summary>
-    /// Загружает дочерние папки и файлы для текущей директории
+    /// Асинхронно подгружает содержимое текущего каталога через сервис загрузки директорий.
     /// </summary>
-    public void LoadChildren()
+    public async Task LoadChildrenAsync()
     {
-        if (!IsDirectory || IsLoaded)
-        {
-            return;
-        }
-        Children.Clear();
-        try
-        {
-            var directories = new DirectoryInfo(FullPath);
-
-            foreach (var dir in directories.GetDirectories())
-            {
-                if ((dir.Attributes & FileAttributes.Hidden) != 0)
-                {
-                    continue;
-                }
-                Children.Add(new FileSystemNode(dir.FullName, isDirectory: true));
-            }
-
-            foreach (var file in directories.GetFiles())
-            {
-                if ((file.Attributes & FileAttributes.Hidden) != 0)
-                {
-                    continue;
-                }
-
-                Children.Add(new FileSystemNode(file.FullName, isDirectory: false));
-            }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Игнорируем папки, к которым нет доступа
-        }
-        catch (Exception ex)
-        {
-            // Игнорируем ошибки чтения диска
-        }
-        IsLoaded = true;
+        await directoryLoaderService.LoadChildrenAsync(this);
     }
-
     /// <summary>
-    /// Управляет раскрытием узла в древе TreeView
+    /// Автоматический обработчик смены состояния IsExpanded.
     /// </summary>
-    public bool IsExpanded
+    partial void OnIsExpandedChanged(bool value)
     {
-        get => isExpanded;
-        set
+        // Когда пользователь раскрывает ветку (value == true) и узел ещё не был загружен
+        if (value && !IsLoaded && IsDirectory)
         {
-            if (isExpanded != value)
-            {
-                isExpanded = value;
-                OnPropertyChanged();
-            }
+            _ = LoadChildrenAsync();
         }
     }
 }

@@ -1,22 +1,31 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
+using TreeExplorer.Constants;
 using TreeExplorer.Models;
+using TreeExplorer.Services;
 using TreeExplorer.ViewModels;
 
 namespace TreeExplorer.Views;
 
+/// <summary>
+/// Класс логики представления для главного окна
+/// </summary>
 public partial class MainWindow : Window
 {
+    private readonly FileOpenerService fileOpenerService = new();
+
     public MainWindow()
     {
         InitializeComponent();
     }
 
+    /// <summary>
+    /// Обработчик нажатия кнопки поиска
+    /// </summary>
     private async void OnSearchButtonClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm)
@@ -28,11 +37,11 @@ public partial class MainWindow : Window
     /// <summary>
     /// Обработчик кнопки «Перейти»
     /// </summary>
-    private void OnOpenPathClick(object? sender, RoutedEventArgs e)
+    private async void OnOpenPathClick(object? sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm)
         {
-            vm.OpenPath();
+            await vm.OpenPathAsync();
         }
     }
 
@@ -49,20 +58,19 @@ public partial class MainWindow : Window
 
         var options = new FolderPickerOpenOptions
         {
-            Title = "Выберите папку для просмотра",
+            Title = AppConstants.FolderPickerTitle,
             AllowMultiple = false
         };
 
         if (DataContext is MainViewModel currentVm &&
             !string.IsNullOrWhiteSpace(currentVm.CurrentPath) &&
-            System.IO.Directory.Exists(currentVm.CurrentPath))
+            Directory.Exists(currentVm.CurrentPath))
         {
             try
             {
                 var startFolder = await topLevel.StorageProvider.TryGetFolderFromPathAsync(currentVm.CurrentPath);
                 if (startFolder != null)
                 {
-                    // Исправлено имя свойства: SuggestedStartLocation
                     options.SuggestedStartLocation = startFolder;
                 }
             }
@@ -94,41 +102,21 @@ public partial class MainWindow : Window
             {
                 // Устанавливаем путь и запускаем построение дерева
                 vm.CurrentPath = localPath;
-                vm.OpenPath();
+                await vm.OpenPathAsync();
             }
         }
     }
 
     /// <summary>
-    /// Обработчик события разворачивания узла дерева.
+    /// Обработчик двойного клика по элементу дерева (открытие файла)
     /// </summary>
-    private void OnTreeExpanded(object? sender, RoutedEventArgs e)
-    {
-        if (e.Source is Control control && control.DataContext is FileSystemNode node)
-        {
-            node.LoadChildren();
-        }
-    }
-
-    private void OnTreeItemDoubleTapped(object? sender, TappedEventArgs e)
+    private async void OnTreeItemDoubleTapped(object? sender, TappedEventArgs e)
     {
         if (sender is TreeView treeView && treeView.SelectedItem is FileSystemNode selectedNode)
         {
-            // Если это файл — открываем его системной программой по умолчанию
-            if (!selectedNode.IsDirectory && File.Exists(selectedNode.FullPath))
+            if (!selectedNode.IsDirectory)
             {
-                try
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = selectedNode.FullPath,
-                        UseShellExecute = true // Позволяет ОС открыть файл через ассоциацию по умолчанию
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Ошибка при открытии файла: {ex.Message}");
-                }
+                await fileOpenerService.OpenFileWithDefaultProgramAsync(selectedNode.FullPath);
             }
         }
     }
