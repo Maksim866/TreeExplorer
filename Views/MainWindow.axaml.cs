@@ -17,6 +17,14 @@ public partial class MainWindow : Window
         InitializeComponent();
     }
 
+    private async void OnSearchButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            await vm.ApplySearchAsync();
+        }
+    }
+
     /// <summary>
     /// Обработчик кнопки «Перейти»
     /// </summary>

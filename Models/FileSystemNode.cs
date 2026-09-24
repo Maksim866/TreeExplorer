@@ -3,14 +3,17 @@ using System.Collections.ObjectModel;
 using System.IO;
 using Avalonia.Media.Imaging;
 using TreeExplorer.Services;
+using TreeExplorer.ViewModels;
 
 namespace TreeExplorer.Models;
 
 /// <summary>
 /// Представляет узел файловой системы, который может быть файлом или папкой.
 /// </summary>
-public class FileSystemNode
+public class FileSystemNode : ViewModelBase
 {
+    private bool isExpanded;
+
     /// <summary>
     /// Имя файла или папки.
     /// </summary>
@@ -30,6 +33,11 @@ public class FileSystemNode
     /// Иконка, представляющая файл или папку.
     /// </summary>
     public Bitmap? Icon { get; set; }
+
+    /// <summary>
+    /// Флаг совпадения с поисковым запросом
+    /// </summary>
+    public bool IsMatch { get; set; }
 
     /// <summary>
     /// Коллекция дочерних узлов, если узел является директорией.
@@ -63,6 +71,9 @@ public class FileSystemNode
         }
     }
 
+    /// <summary>
+    /// Загружает дочерние папки и файлы для текущей директории
+    /// </summary>
     public void LoadChildren()
     {
         if (!IsDirectory || IsLoaded)
@@ -104,4 +115,19 @@ public class FileSystemNode
         IsLoaded = true;
     }
 
+    /// <summary>
+    /// Управляет раскрытием узла в древе TreeView
+    /// </summary>
+    public bool IsExpanded
+    {
+        get => isExpanded;
+        set
+        {
+            if (isExpanded != value)
+            {
+                isExpanded = value;
+                OnPropertyChanged();
+            }
+        }
+    }
 }

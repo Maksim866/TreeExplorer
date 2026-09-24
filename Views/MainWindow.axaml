@@ -16,7 +16,7 @@
         <vm:MainViewModel/>
     </Design.DataContext>
 
-    <Grid RowDefinitions="Auto, Auto, *, Auto" Margin="12">
+    <Grid RowDefinitions="Auto, Auto, Auto, *, Auto" Margin="12">
         <!-- 1. ЗАГОЛОВОК ПРИЛОЖЕНИЯ -->
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="TreeExplorer" FontSize="20" FontWeight="Bold" Foreground="#2B579A"/>
@@ -42,8 +42,21 @@
                     Click="OnBrowseFolderClick"/>
         </Grid>
 
-        <!-- 3. ДЕРЕВО ФАЙЛОВ И ПАПОК -->
-        <Border Grid.Row="2" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="6" Padding="4" Background="#FAFAFA">
+        <!-- 3. ПАНЕЛЬ ПОИСКА -->
+        <Grid Grid.Row="2" ColumnDefinitions="*, Auto" Margin="0,0,0,8">
+            <TextBox Grid.Column="0" 
+                     Text="{Binding SearchText, Mode=TwoWay}" 
+                     Watermark="🔍 Введите название папки или файла..." 
+                     VerticalAlignment="Center"/>
+
+            <Button Grid.Column="1" 
+                    Content="Найти" 
+                    Margin="8,0,0,0" 
+                    Click="OnSearchButtonClick"/>
+        </Grid>
+
+        <!-- 4. ДЕРЕВО ФАЙЛОВ И ПАПОК -->
+        <Border Grid.Row="3" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="6" Padding="4" Background="#FAFAFA">
             <Grid>
                 <!-- Сообщение-заглушка, если ничего не выбрано -->
                 <TextBlock Text="Укажите путь выше или нажмите «Обзор...», чтобы открыть папку" 
@@ -57,9 +70,29 @@
                 <TreeView ItemsSource="{Binding RootNodes}"
                           TreeViewItem.Expanded="OnTreeExpanded"
                           DoubleTapped="OnTreeItemDoubleTapped">
+
+                    <TreeView.ItemContainerTheme>
+                        <!-- Указываем x:DataType="models:FileSystemNode" для валидации свойства IsExpanded -->
+                        <ControlTheme TargetType="TreeViewItem" 
+                                    BasedOn="{StaticResource {x:Type TreeViewItem}}" 
+                                    x:DataType="models:FileSystemNode">
+                            <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}"/>
+                        </ControlTheme>
+                    </TreeView.ItemContainerTheme>
+
                     <TreeView.ItemTemplate>
                         <TreeDataTemplate ItemsSource="{Binding Children}" x:DataType="models:FileSystemNode">
                             <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                <!-- КОНТЕКСТНОЕ МЕНЮ ПО ПРАВОЙ КНОПКЕ МЫШИ -->
+                                <StackPanel.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Сделать корнем" 
+                                                  Command="{Binding $parent[TreeView].((vm:MainViewModel)DataContext).SetAsRootCommand}"
+                                                  CommandParameter="{Binding}"
+                                                  IsEnabled="{Binding IsDirectory}" />
+                                    </ContextMenu>
+                                </StackPanel.ContextMenu>
+
                                 <Image Source="{Binding Icon}" Width="16" Height="16" VerticalAlignment="Center"/>
                                 <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
                             </StackPanel>
@@ -69,8 +102,8 @@
             </Grid>
         </Border>
 
-        <!-- 4. СТРОКА СОСТОЯНИЯ (ПОДВАЛ) -->
-        <Border Grid.Row="3" Margin="0,8,0,0" Padding="4">
+        <!-- 5. СТРОКА СОСТОЯНИЯ (ПОДВАЛ) -->
+        <Border Grid.Row="4" Margin="0,8,0,0" Padding="4">
             <TextBlock Text="{Binding CurrentPath, StringFormat='Текущий каталог: {0}'}" 
                        FontSize="11" Foreground="#888888"/>
         </Border>
